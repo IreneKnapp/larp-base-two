@@ -142,5 +142,18 @@ getAllInterfaces = do
 
 accept :: Server ()
 accept = do
-  lift $ HTTP.httpLog "Hmm."
+  uri <- lift $ HTTP.getRequestURI
+  case uri of
+    "/" -> do
+      lift $ HTTP.setResponseHeader HTTP.HttpContentType
+        "text/html; charset=utf-8"
+      lift $ HTTP.httpPutStr "Foo."
+    "/api" -> do
+      lift $ HTTP.setResponseHeader HTTP.HttpContentType
+        "text/html; charset=utf-8"
+      lift $ HTTP.httpPutStr "Bar."
+    _ -> do
+      lift $ HTTP.setResponseHeader HTTP.HttpContentType
+        "text/html; charset=utf-8"
+      lift $ HTTP.setResponseStatus 404
 
