@@ -2,6 +2,7 @@
 module Main (main) where
 
 import qualified Data.Aeson as JSON
+import qualified Data.Bits as Bits
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
@@ -10,6 +11,7 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import qualified Database.SQLite3 as SQL
 import qualified Network.HTTP as HTTP
+import qualified Network.Info as Network
 import qualified Network.Socket as Network
 import qualified System.Environment as System
 
@@ -46,9 +48,9 @@ data Listener =
   deriving (Show)
 instance JSON.FromJSON Listener where
   parseJSON (JSON.Object v) = do
-    port <- v JSON..: "port" >>= \port -> return $ fromInteger $ read port
+    port <- v JSON..: "port" >>= \port -> return $ fromIntegral (port :: Int)
     Listener <$> v JSON..:? "interface"
-             <*> return port
+             <*> pure port
   parseJSON _ = mzero
 
 
@@ -88,6 +90,7 @@ runService configurationFilename = do
         SQL.open $ Text.pack $ configurationDatabaseFilename configuration
       databaseMVar <- newMVar database
       captchaCacheMVar <- newMVar Map.empty
+      allInterfaces <- getAllInterfaces
       let state = ServerState {
               serverStateDatabase = databaseMVar,
               serverStateCaptchaCache = captchaCacheMVar,
@@ -109,8 +112,11 @@ runService configurationFilename = do
                      let portNumber = listenerPort listener
                          socketAddresses =
                            case listenerInterface listener of
-                             Nothing -> 
-                               [] -- TODO should be all, rather than none
+                             Nothing ->
+                               map (\interface ->
+                                      Network.SockAddrInet portNumber
+                                                           interface)
+                                   allInterfaces
                              Just hostAddress ->
                                [Network.SockAddrInet portNumber hostAddress]
                      in map (\socketAddress ->
@@ -118,11 +124,20 @@ runService configurationFilename = do
                                    HTTP.listenSocketParametersAddress =
                                      socketAddress,
                                    HTTP.listenSocketParametersSecure = False
-                                })
+                                 })
                             socketAddresses)
                   (configurationListeners configuration)
             }
       HTTP.acceptLoop serverParameters $ evalStateT accept state
+
+
+getAllInterfaces :: IO [Network.HostAddress]
+getAllInterfaces = do
+  interfaces <- Network.getNetworkInterfaces
+  return $ map (\interface ->
+                  let Network.IPv4 hostAddress = Network.ipv4 interface
+                  in hostAddress)
+               interfaces
 
 
 accept :: Server ()
