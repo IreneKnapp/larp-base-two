@@ -1,4 +1,4 @@
-name: DeltaVee
+name: larpbase
 version: 1.0
 cabal-version: >= 1.6
 build-type: Simple
@@ -9,23 +9,13 @@ author: Irene Knapp
 maintainer: irene.knapp@icloud.com
 homepage: http://ireneknapp.com/software/
 bug-reports: https://github.com/IreneKnapp/deltavee/issues/new
-category: Game
-synopsis: Turn-based orbital-mechanics combat game
-description:
-  This is a turn-based orbital-mechanics combat game.  What that means is that
-  players (who may be computer-assisted) submit instructions every turn
-  through either a friendly human interface, or a web-based API, and see the
-  results in the same fashion.  There is no graphical front-end, nor even a
-  terminal one; the ships and their sensors are all you get.  There are
-  multiple instances of the game running in parallel, each with its own
-  scoring system, win criteria, and temporal parameters.
 
 Source-Repository head
   type: git
-  location: git://github.com/IreneKnapp/deltavee.git
+  location: git://github.com/IreneKnapp/larp-base-two.git
 
-Executable deltavee
-  main-is: DeltaVee.hs
+Executable larpbase
+  main-is: Larpbase.hs
   hs-source-dirs: Haskell
   build-depends: aeson >= 0.6.1.0 && < 1,
                  base >= 4.1 && < 5,

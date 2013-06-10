@@ -1,0 +1,9 @@
+{
+"database": ".../development.db",
+"log": ".../development.log",
+"user": "...",
+"group": "...",
+"listeners": [{
+  "port": 1080
+}]
+}
