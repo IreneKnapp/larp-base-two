@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main (main) where
 
+import qualified Data.Binary as Binary
 import qualified Data.Bits as Bits
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -88,13 +89,11 @@ migrateCharacters database fileName = do
         XML.tagNoAttr "all-series" $ XML.many $ do
           XML.tagName "series" (XML.requireAttr "id") $ \oldID -> do
             newID <- liftIO $ migrateID seriesIDs oldID
-            liftIO $ putStrLn $ ""
-            liftIO $ putStrLn $ "old series id: " ++ Text.unpack oldID
-            liftIO $ putStrLn $ "new series id: " ++ show newID
+            liftIO $ createSeries database newID
             XML.tagNoAttr "names" $ XML.many $ do
               XML.tagNoAttr "name" $ do
                 name <- XML.content
-                liftIO $ putStrLn $ "name: " ++ Text.unpack name
+                liftIO $ createSeriesName database newID name
                 return ()
             return ()
         XML.tagNoAttr "all-characters" $ XML.many $ do
@@ -106,15 +105,11 @@ migrateCharacters database fileName = do
               $ \(oldID, oldSeriesID) -> do
             newID <- liftIO $ migrateID characterIDs oldID
             newSeriesID <- liftIO $ migrateID seriesIDs oldSeriesID
-            liftIO $ putStrLn $ ""
-            liftIO $ putStrLn $ "old character id: " ++ Text.unpack oldID
-            liftIO $ putStrLn $ "new character id: " ++ show newID
-            liftIO $ putStrLn $ "old series id: " ++ Text.unpack oldSeriesID
-            liftIO $ putStrLn $ "new series id: " ++ show newSeriesID
+            liftIO $ createCharacter database newSeriesID newID
             XML.tagNoAttr "names" $ XML.many $ do
               XML.tagNoAttr "name" $ do
                 name <- XML.content
-                liftIO $ putStrLn $ "name: " ++ Text.unpack name
+                liftIO $ createCharacterName database newID name
                 return ()
             return ()
       return ()
@@ -134,3 +129,69 @@ migrateID allIDsMVar textID = do
       let allIDs' = Map.insert textID uuid allIDs
       putMVar allIDsMVar allIDs'
       return uuid
+
+
+createSeries :: SQL.Database -> UUID.UUID -> IO ()
+createSeries database seriesID = do
+  statement <- SQL.prepare database
+    "INSERT INTO series (series_id) VALUES (?)"
+  SQL.bindBlob statement 1 (BS.concat $ LBS.toChunks $ Binary.encode seriesID)
+  let loop = do
+        result <- SQL.step statement
+        case result of
+          SQL.Row -> loop
+          SQL.Done -> return ()
+  loop
+  SQL.finalize statement
+
+
+createCharacter :: SQL.Database -> UUID.UUID -> UUID.UUID -> IO ()
+createCharacter database seriesID characterID = do
+  statement <- SQL.prepare database
+    "INSERT INTO characters (series_id, character_id) VALUES (?, ?)"
+  SQL.bindBlob statement 1
+    (BS.concat $ LBS.toChunks $ Binary.encode seriesID)
+  SQL.bindBlob statement 2
+    (BS.concat $ LBS.toChunks $ Binary.encode characterID)
+  let loop = do
+        result <- SQL.step statement
+        case result of
+          SQL.Row -> loop
+          SQL.Done -> return ()
+  loop
+  SQL.finalize statement
+
+
+createSeriesName :: SQL.Database -> UUID.UUID -> Text.Text -> IO ()
+createSeriesName database seriesID name = do
+  statement <- SQL.prepare database $ Text.intercalate " "
+    ["INSERT INTO series_names (series_id, rank, name) VALUES",
+     "(?1, coalesce((SELECT max(rank) + 1 FROM series_names",
+     "WHERE series_id = ?1), 0), ?2)"]
+  SQL.bindBlob statement 1 (BS.concat $ LBS.toChunks $ Binary.encode seriesID)
+  SQL.bindBlob statement 2 (Text.encodeUtf8 name)
+  let loop = do
+        result <- SQL.step statement
+        case result of
+          SQL.Row -> loop
+          SQL.Done -> return ()
+  loop
+  SQL.finalize statement
+
+
+createCharacterName :: SQL.Database -> UUID.UUID -> Text.Text -> IO ()
+createCharacterName database characterID name = do
+  statement <- SQL.prepare database $ Text.intercalate " "
+    ["INSERT INTO character_names (character_id, rank, name) VALUES",
+     "(?1, coalesce((SELECT max(rank) + 1 FROM character_names",
+     "WHERE character_id = ?1), 0), ?2)"]
+  SQL.bindBlob statement 1
+    (BS.concat $ LBS.toChunks $ Binary.encode characterID)
+  SQL.bindBlob statement 2 (Text.encodeUtf8 name)
+  let loop = do
+        result <- SQL.step statement
+        case result of
+          SQL.Row -> loop
+          SQL.Done -> return ()
+  loop
+  SQL.finalize statement
