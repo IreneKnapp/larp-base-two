@@ -5,6 +5,7 @@ import qualified Data.Aeson as JSON
 import qualified Data.Bits as Bits
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.CaseInsensitive as CI
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -85,28 +86,18 @@ runService configurationFilename = do
               serverStateSessionID = Nothing
             }
           port = configurationPort configuration
-      HTTP.run port $ Gzip.gzip Gzip.def application
+      HTTP.run port $ Gzip.gzip Gzip.def accept
 
 
-application :: HTTP.Application
-application _ = do
-  return $ HTTP.responseLBS HTTP.status200 [("Content-Type", "text/plain")]
-                            "Hello, web!"
-{-
-accept :: Server ()
-accept = do
-  uri <- lift $ HTTP.getRequestURI
-  case uri of
-    "/" -> do
-      lift $ HTTP.setResponseHeader HTTP.HttpContentType
-        "text/html; charset=utf-8"
-      lift $ HTTP.httpPutStr "Foo."
-    "/api" -> do
-      lift $ HTTP.setResponseHeader HTTP.HttpContentType
-        "text/html; charset=utf-8"
-      lift $ HTTP.httpPutStr "Bar."
-    _ -> do
-      lift $ HTTP.setResponseHeader HTTP.HttpContentType
-        "text/html; charset=utf-8"
-      lift $ HTTP.setResponseStatus 404
--}
+accept :: HTTP.Application
+accept request = do
+  case HTTP.pathInfo request of
+    ["neko-devel"] ->
+      return $ HTTP.responseLBS HTTP.status200 headers "Hello, web!"
+    _ ->
+      return $ HTTP.responseLBS HTTP.status404 headers "Not found."
+
+
+headers :: [(CI.CI BS.ByteString, BS.ByteString)]
+headers = [("Content-Type", "text/html; charset=utf8")]
+
