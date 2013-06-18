@@ -10,9 +10,11 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import qualified Database.SQLite3 as SQL
-import qualified Network.HTTP as HTTP
+import qualified Network.HTTP.Types as HTTP
 import qualified Network.Info as Network
 import qualified Network.Socket as Network
+import qualified Network.Wai as HTTP
+import qualified Network.Wai.Handler.Warp as HTTP
 import qualified System.Environment as System
 
 import Control.Applicative
@@ -28,7 +30,7 @@ data Configuration =
       configurationLogFilename :: FilePath,
       configurationUserName :: Maybe String,
       configurationGroupName :: Maybe String,
-      configurationListeners :: [Listener]
+      configurationPort :: Int
     }
 instance JSON.FromJSON Configuration where
   parseJSON (JSON.Object v) =
@@ -36,21 +38,7 @@ instance JSON.FromJSON Configuration where
                   <*> v JSON..: "log"
                   <*> v JSON..:? "user"
                   <*> v JSON..:? "group"
-                  <*> v JSON..: "listeners"
-  parseJSON _ = mzero
-
-
-data Listener =
-  Listener {
-      listenerInterface :: Maybe Network.HostAddress,
-      listenerPort :: Network.PortNumber
-    }
-  deriving (Show)
-instance JSON.FromJSON Listener where
-  parseJSON (JSON.Object v) = do
-    port <- v JSON..: "port" >>= \port -> return $ fromIntegral (port :: Int)
-    Listener <$> v JSON..:? "interface"
-             <*> pure port
+                  <*> v JSON..: "port"
   parseJSON _ = mzero
 
 
@@ -62,7 +50,7 @@ data ServerState =
     }
 
 
-type Server = StateT ServerState HTTP.HTTP
+-- type Server = StateT ServerState HTTP.HTTP
 
 
 main :: IO ()
@@ -75,7 +63,7 @@ main = do
 
 help :: IO ()
 help = do
-  putStrLn "Usage: deltavee configuration.json"
+  putStrLn "Usage: larpbase configuration.json"
 
 
 runService :: FilePath -> IO ()
@@ -90,56 +78,20 @@ runService configurationFilename = do
         SQL.open $ Text.pack $ configurationDatabaseFilename configuration
       databaseMVar <- newMVar database
       captchaCacheMVar <- newMVar Map.empty
-      allInterfaces <- getAllInterfaces
       let state = ServerState {
               serverStateDatabase = databaseMVar,
               serverStateCaptchaCache = captchaCacheMVar,
               serverStateSessionID = Nothing
             }
-          serverParameters = HTTP.HTTPServerParameters {
-              HTTP.serverParametersAccessLogPath = Nothing,
-              HTTP.serverParametersErrorLogPath =
-                Just $ configurationLogFilename configuration,
-              HTTP.serverParametersDaemonize = True,
-              HTTP.serverParametersUserToChangeTo =
-                configurationUserName configuration,
-              HTTP.serverParametersGroupToChangeTo =
-                configurationGroupName configuration,
-              HTTP.serverParametersForkPrimitive = forkIO,
-              HTTP.serverParametersListenSockets =
-                concatMap
-                  (\listener ->
-                     let portNumber = listenerPort listener
-                         socketAddresses =
-                           case listenerInterface listener of
-                             Nothing ->
-                               map (\interface ->
-                                      Network.SockAddrInet portNumber
-                                                           interface)
-                                   allInterfaces
-                             Just hostAddress ->
-                               [Network.SockAddrInet portNumber hostAddress]
-                     in map (\socketAddress ->
-                               HTTP.HTTPListenSocketParameters {
-                                   HTTP.listenSocketParametersAddress =
-                                     socketAddress,
-                                   HTTP.listenSocketParametersSecure = False
-                                 })
-                            socketAddresses)
-                  (configurationListeners configuration)
-            }
-      HTTP.acceptLoop serverParameters $ evalStateT accept state
+          port = configurationPort configuration
+      HTTP.run port application
 
 
-getAllInterfaces :: IO [Network.HostAddress]
-getAllInterfaces = do
-  interfaces <- Network.getNetworkInterfaces
-  return $ map (\interface ->
-                  let Network.IPv4 hostAddress = Network.ipv4 interface
-                  in hostAddress)
-               interfaces
-
-
+application :: HTTP.Application
+application _ = do
+  return $ HTTP.responseLBS HTTP.status200 [("Content-Type", "text/plain")]
+                            "Hello, web!"
+{-
 accept :: Server ()
 accept = do
   uri <- lift $ HTTP.getRequestURI
@@ -156,4 +108,4 @@ accept = do
       lift $ HTTP.setResponseHeader HTTP.HttpContentType
         "text/html; charset=utf-8"
       lift $ HTTP.setResponseStatus 404
-
+-}

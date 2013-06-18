@@ -12,9 +12,6 @@ import qualified Data.Text.IO as Text
 import qualified Data.UUID as UUID
 import qualified Database.SQLite3 as SQL
 import qualified Filesystem.Path.CurrentOS as System
-import qualified Network.HTTP as HTTP
-import qualified Network.Info as Network
-import qualified Network.Socket as Network
 import qualified System.Directory as System
 import qualified System.Environment as System
 import qualified System.Exit as System
