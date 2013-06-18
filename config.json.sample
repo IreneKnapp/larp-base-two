@@ -3,7 +3,5 @@
 "log": ".../development.log",
 "user": "...",
 "group": "...",
-"listeners": [{
-  "port": 1080
-}]
+"port": 1080
 }

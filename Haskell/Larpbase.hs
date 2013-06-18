@@ -15,6 +15,7 @@ import qualified Network.Info as Network
 import qualified Network.Socket as Network
 import qualified Network.Wai as HTTP
 import qualified Network.Wai.Handler.Warp as HTTP
+import qualified Network.Wai.Middleware.Gzip as Gzip
 import qualified System.Environment as System
 
 import Control.Applicative
@@ -84,7 +85,7 @@ runService configurationFilename = do
               serverStateSessionID = Nothing
             }
           port = configurationPort configuration
-      HTTP.run port application
+      HTTP.run port $ Gzip.gzip Gzip.def application
 
 
 application :: HTTP.Application
